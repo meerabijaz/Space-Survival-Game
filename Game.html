@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Spacecraft Survival - Enhanced</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+    
+    body { 
+      margin: 0; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      background: radial-gradient(ellipse at center, #1a0040 0%, #0a001f 100%);
+      font-family: 'Orbitron', monospace;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    
+    canvas { 
+      border: 3px solid #00ffff; 
+      border-radius: 15px; 
+      box-shadow: 
+        0 0 30px rgba(0, 255, 255, 0.6),
+        inset 0 0 20px rgba(0, 255, 255, 0.1);
+      background: radial-gradient(ellipse at center, #1a0040 0%, #0a001f 100%);
+    }
+    
+    .game-container {
+      position: relative;
+    }
+    
+    .ui-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+<div class="game-container">
+  <div class="ui-overlay"></div>
+<script>
+let spacecraftX, spacecraftY, spacecraftWidth, spacecraftHeight;
+let velocityY = 0;
+let gravity = 0.3;
+let thrust = -8;
+let asteroids = [];
+let particles = [];
+let thrusterParticles = [];
+let score = 0;
+let highScore = 0;
+let spawnRate = 80;
+let gameState = 'playing'; // 'playing', 'gameOver'
+let thrusterActive = false;
+let spacecraftTilt = 0;
+let shieldEnergy = 100;
+let maxShieldEnergy = 100;
+
+function setup() {
+  createCanvas(1000, 700);
+  spacecraftWidth = 80;
+  spacecraftHeight = 50;
+  spacecraftX = 120;
+  spacecraftY = height / 2;
+  spawnAsteroid();
+}
+
+function draw() {
+  // Enhanced cosmic background
+  drawCosmicBackground();
+  
+  if (gameState === 'playing') {
+    updateGameplay();
+  }
+  
+  drawSpacecraft();
+  drawAsteroids();
+  drawParticles();
+  drawThrusterParticles();
+  drawEnhancedHUD();
+  
+  if (gameState === 'gameOver') {
+    drawGameOverScreen();
+  }
+}
+
+function drawCosmicBackground() {
+  // Deep space gradient
+  for (let i = 0; i <= height; i++) {
+    let inter = map(i, 0, height, 0, 1);
+    let c = lerpColor(color(15, 5, 45), color(5, 0, 25), inter);
+    stroke(c);
+    line(0, i, width, i);
+  }
+  
+  // Animated stars
+  drawAnimatedStars();
+  
+  // Moving nebulae
+  drawMovingNebulae();
+  
+  // Distant planets
+  drawDistantPlanets();
+}
+
+function drawAnimatedStars() {
+  let time = frameCount * 0.01;
+  randomSeed(42);
+  
+  for (let i = 0; i < 150; i++) {
+    let x = random(width);
+    let y = random(height);
+    let brightness = 150 + sin(time + i * 0.1) * 105;
+    let size = 1 + sin(time * 2 + i * 0.05) * 0.5;
+    
+    fill(255, 255, 200 + sin(time + i) * 55, brightness);
+    noStroke();
+    ellipse(x, y, size, size);
+    
+    // Twinkling effect
+    if (random() < 0.1) {
+      fill(255, 255, 255, 100);
+      ellipse(x, y, size * 3, size * 3);
+    }
+  }
+}
+
+function drawMovingNebulae() {
+  let time = frameCount * 0.005;
+  
+  for (let i = 0; i < 4; i++) {
+    let x = (i * 250 - time * 20) % (width + 200) - 100;
+    let y = 150 + i * 120 + sin(time + i) * 30;
+    
+    // Purple nebula
+    fill(80, 20, 120, 40);
+    noStroke();
+    ellipse(x, y, 180 + sin(time * 2) * 20, 90 + cos(time * 1.5) * 10);
+    
+    // Blue nebula overlay
+    fill(20, 80, 200, 30);
+    ellipse(x + 30, y - 10, 120 + cos(time * 2.5) * 15, 70 + sin(time * 2) * 8);
+  }
+}
+
+function drawDistantPlanets() {
+  let time = frameCount * 0.003;
+  
+  // Planet 1
+  push();
+  translate(width - 100 + sin(time) * 10, 100 + cos(time * 0.5) * 15);
+  fill(150, 100, 200, 180);
+  noStroke();
+  ellipse(0, 0, 60, 60);
+  fill(120, 80, 180, 100);
+  ellipse(-5, -5, 40, 40);
+  pop();
+  
+  // Planet 2
+  push();
+  translate(width - 200 + cos(time * 0.7) * 20, height - 120 + sin(time * 0.8) * 12);
+  fill(200, 120, 80, 160);
+  noStroke();
+  ellipse(0, 0, 45, 45);
+  fill(180, 100, 60, 100);
+  ellipse(3, 3, 30, 30);
+  pop();
+}
+
+function updateGameplay() {
+  // Apply gravity and update spacecraft position
+  velocityY += gravity;
+  spacecraftY += velocityY;
+  spacecraftY = constrain(spacecraftY, spacecraftHeight / 2, height - spacecraftHeight / 2);
+  
+  // Spacecraft tilt based on velocity
+  spacecraftTilt = lerp(spacecraftTilt, velocityY * 0.1, 0.2);
+  spacecraftTilt = constrain(spacecraftTilt, -0.5, 0.5);
+  
+  // Thrust control
+  thrusterActive = keyIsDown(32);
+  if (thrusterActive) {
+    velocityY = thrust;
+    createThrusterParticles();
+  }
+  
+  // Update asteroids
+  updateAsteroids();
+  
+  // Update score and difficulty
+  score += 0.15;
+  spawnRate = max(45, spawnRate - 0.015);
+  if (frameCount % floor(spawnRate) === 0) {
+    spawnAsteroid();
+  }
+  
+  // Shield regeneration
+  shieldEnergy = min(maxShieldEnergy, shieldEnergy + 0.2);
+  
+  // Check boundaries
+  if (spacecraftY <= spacecraftHeight / 2 || spacecraftY >= height - spacecraftHeight / 2) {
+    gameOver();
+  }
+}
+
+function drawSpacecraft() {
+  push();
+  translate(spacecraftX, spacecraftY);
+  rotate(spacecraftTilt);
+  
+  // Main hull - sleek futuristic design
+  fill(180, 220, 255);
+  stroke(100, 150, 255);
+  strokeWeight(2);
+  
+  // Main body (elongated hexagon)
+  beginShape();
+  vertex(-spacecraftWidth/2, 0);
+  vertex(-spacecraftWidth/3, -spacecraftHeight/3);
+  vertex(spacecraftWidth/3, -spacecraftHeight/4);
+  vertex(spacecraftWidth/2, 0);
+  vertex(spacecraftWidth/3, spacecraftHeight/4);
+  vertex(-spacecraftWidth/3, spacecraftHeight/3);
+  endShape(CLOSE);
+  
+  // Cockpit window
+  fill(50, 150, 255, 180);
+  noStroke();
+  ellipse(spacecraftWidth/6, 0, spacecraftWidth/3, spacecraftHeight/2.5);
+  
+  // Engine details
+  fill(255, 100, 50);
+  noStroke();
+  rect(-spacecraftWidth/2, -8, 15, 16, 3);
+  
+  // Wing details
+  fill(120, 160, 255);
+  stroke(80, 120, 200);
+  strokeWeight(1);
+  triangle(-spacecraftWidth/4, -spacecraftHeight/3, spacecraftWidth/8, -spacecraftHeight/2.5, spacecraftWidth/4, -spacecraftHeight/3);
+  triangle(-spacecraftWidth/4, spacecraftHeight/3, spacecraftWidth/8, spacecraftHeight/2.5, spacecraftWidth/4, spacecraftHeight/3);
+  
+  // Thruster glow when active
+  if (thrusterActive) {
+    fill(255, 120, 0, 100);
+    noStroke();
+    ellipse(-spacecraftWidth/2 - 10, 0, 20, 30);
+    fill(255, 200, 0, 150);
+    ellipse(-spacecraftWidth/2 - 5, 0, 12, 20);
+  }
+  
+  // Shield effect
+  if (shieldEnergy > 50) {
+    stroke(0, 255, 255, map(shieldEnergy, 50, 100, 30, 100));
+    strokeWeight(2);
+    noFill();
+    ellipse(0, 0, spacecraftWidth + 20, spacecraftHeight + 15);
+  }
+  
+  pop();
+}
+
+function drawAsteroids() {
+  for (let i = asteroids.length - 1; i >= 0; i--) {
+    let asteroid = asteroids[i];
+    asteroid.x -= asteroid.speed;
+    asteroid.rotation += 0.02;
+    
+    push();
+    translate(asteroid.x, asteroid.y);
+    rotate(asteroid.rotation);
+    
+    // Enhanced asteroid with texture
+    fill(100, 80, 70);
+    stroke(60, 50, 40);
+    strokeWeight(1);
+    
+    beginShape();
+    let vertices = 8;
+    for (let j = 0; j < vertices; j++) {
+      let angle = map(j, 0, vertices, 0, TWO_PI);
+      let r = asteroid.size/2 + sin(angle * 3 + asteroid.rotation * 2) * asteroid.size/8;
+      let x = cos(angle) * r;
+      let y = sin(angle) * r;
+      vertex(x, y);
+    }
+    endShape(CLOSE);
+    
+    // Asteroid surface details
+    fill(120, 100, 90);
+    noStroke();
+    for (let k = 0; k < 3; k++) {
+      let detailAngle = k * TWO_PI / 3 + asteroid.rotation;
+      let detailX = cos(detailAngle) * asteroid.size/4;
+      let detailY = sin(detailAngle) * asteroid.size/4;
+      ellipse(detailX, detailY, asteroid.size/8, asteroid.size/8);
+    }
+    
+    pop();
+    
+    // Check collision
+    if (collides(spacecraftX, spacecraftY, spacecraftWidth, spacecraftHeight, asteroid.x, asteroid.y, asteroid.size)) {
+      if (shieldEnergy > 20) {
+        shieldEnergy -= 25;
+        createShieldHitEffect(asteroid.x, asteroid.y);
+        asteroids.splice(i, 1);
+      } else {
+        gameOver();
+        return;
+      }
+    }
+    
+    // Remove asteroid if off screen
+    if (asteroid.x < -asteroid.size) {
+      asteroids.splice(i, 1);
+    }
+  }
+}
+
+function updateAsteroids() {
+  // Spawn new asteroids
+  if (frameCount % floor(spawnRate) === 0) {
+    spawnAsteroid();
+  }
+}
+
+function drawParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    let p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life -= 1;
+    
+    let alpha = map(p.life, 0, p.maxLife, 0, 255);
+    fill(red(p.color), green(p.color), blue(p.color), alpha);
+    noStroke();
+    ellipse(p.x, p.y, p.size, p.size);
+    
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function drawThrusterParticles() {
+  for (let i = thrusterParticles.length - 1; i >= 0; i--) {
+    let p = thrusterParticles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life -= 1;
+    p.size *= 0.98;
+    
+    let alpha = map(p.life, 0, 20, 0, 255);
+    fill(255, 150, 0, alpha);
+    noStroke();
+    ellipse(p.x, p.y, p.size, p.size);
+    
+    if (p.life <= 0) thrusterParticles.splice(i, 1);
+  }
+}
+
+function drawEnhancedHUD() {
+  // HUD Panel background
+  fill(0, 20, 40, 150);
+  stroke(0, 150, 255, 100);
+  strokeWeight(2);
+  rect(10, 10, 250, 120, 10);
+  
+  // Score display
+  fill(0, 255, 255);
+  textFont('Arial');
+  textSize(24);
+  textAlign(LEFT);
+  text("SCORE", 25, 40);
+  textSize(32);
+  fill(255, 255, 100);
+  text(floor(score), 25, 70);
+  
+  // High score
+  fill(0, 255, 255);
+  textSize(18);
+  text("HIGH: " + floor(highScore), 25, 95);
+  
+  // Shield energy bar
+  fill(0, 255, 255);
+  textSize(16);
+  text("SHIELD", 25, 120);
+  
+  // Shield bar background
+  fill(50, 50, 50);
+  stroke(100, 100, 100);
+  strokeWeight(1);
+  rect(90, 105, 150, 12, 6);
+  
+  // Shield bar fill
+  let shieldWidth = map(shieldEnergy, 0, maxShieldEnergy, 0, 150);
+  if (shieldEnergy > 60) {
+    fill(0, 255, 0);
+  } else if (shieldEnergy > 30) {
+    fill(255, 255, 0);
+  } else {
+    fill(255, 0, 0);
+  }
+  noStroke();
+  rect(90, 105, shieldWidth, 12, 6);
+  
+  // Instructions
+  if (frameCount < 300) {
+    fill(255, 255, 255, map(frameCount, 200, 300, 255, 0));
+    textSize(18);
+    textAlign(CENTER);
+    text("HOLD SPACEBAR TO THRUST", width/2, height - 50);
+  }
+}
+
+function keyPressed() {
+  if (keyCode === 32 && gameState === 'gameOver') {
+    resetGame();
+  }
+}
+
+function createThrusterParticles() {
+  for (let i = 0; i < 3; i++) {
+    thrusterParticles.push({
+      x: spacecraftX - spacecraftWidth/2 - 10,
+      y: spacecraftY + random(-5, 5),
+      vx: random(-4, -2),
+      vy: random(-1, 1),
+      life: 20,
+      size: random(4, 8)
+    });
+  }
+}
+
+function createShieldHitEffect(x, y) {
+  for (let i = 0; i < 15; i++) {
+    particles.push({
+      x: x,
+      y: y,
+      vx: random(-5, 5),
+      vy: random(-5, 5),
+      life: 30,
+      maxLife: 30,
+      size: random(3, 8),
+      color: color(0, 255, 255)
+    });
+  }
+}
+
+function spawnAsteroid() {
+  let asteroid = {
+    x: width + 50,
+    y: random(60, height - 60),
+    size: random(40, 90),
+    speed: random(3, 7),
+    rotation: 0
+  };
+  asteroids.push(asteroid);
+}
+
+function collides(sx, sy, sw, sh, ax, ay, asize) {
+  let distX = abs(sx - ax);
+  let distY = abs(sy - ay);
+  let combinedWidth = (sw + asize) / 2.5;
+  let combinedHeight = (sh + asize) / 2.5;
+  return distX < combinedWidth && distY < combinedHeight;
+}
+
+function gameOver() {
+  gameState = 'gameOver';
+  highScore = max(highScore, floor(score));
+  
+  // Explosion particles
+  for (let i = 0; i < 30; i++) {
+    particles.push({
+      x: spacecraftX,
+      y: spacecraftY,
+      vx: random(-8, 8),
+      vy: random(-8, 8),
+      life: 60,
+      maxLife: 60,
+      size: random(4, 12),
+      color: color(255, random(50, 150), 0)
+    });
+  }
+}
+
+function drawGameOverScreen() {
+  // Semi-transparent overlay
+  fill(0, 0, 0, 150);
+  noStroke();
+  rect(0, 0, width, height);
+  
+  // Game over panel
+  fill(20, 0, 40, 200);
+  stroke(255, 0, 100);
+  strokeWeight(3);
+  rect(width/2 - 200, height/2 - 100, 400, 200, 15);
+  
+  // Game over text
+  fill(255, 50, 100);
+  textFont('Arial');
+  textSize(42);
+  textAlign(CENTER);
+  text("MISSION FAILED", width/2, height/2 - 40);
+  
+  fill(255, 255, 255);
+  textSize(24);
+  text("Final Score: " + floor(score), width/2, height/2);
+  text("Best Score: " + floor(highScore), width/2, height/2 + 30);
+  
+  fill(0, 255, 255);
+  textSize(20);
+  text("Press SPACEBAR to restart mission", width/2, height/2 + 70);
+}
+
+function resetGame() {
+  gameState = 'playing';
+  spacecraftY = height / 2;
+  velocityY = 0;
+  score = 0;
+  spawnRate = 80;
+  spacecraftTilt = 0;
+  shieldEnergy = maxShieldEnergy;
+  asteroids = [];
+  particles = [];
+  thrusterParticles = [];
+  spawnAsteroid();
+}
+</script>
+</div>
+</body>
+</html>
